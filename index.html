@@ -1,0 +1,467 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no">
+    <meta name="theme-color" content="#075e54">
+    
+    <link rel="manifest" href="manifest.json">
+    
+    <title>ChatTech | Canlı Sohbet</title>
+    
+    <!-- Firebase SDK -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-app.js";
+        import { getAuth, signInWithPopup, GoogleAuthProvider, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-auth.js";
+        import { getFirestore, collection, query, orderBy, onSnapshot, addDoc, serverTimestamp, doc, updateDoc, setDoc, getDoc } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-firestore.js";
+        import { getStorage, ref, uploadBytes, getDownloadURL } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-storage.js";
+        import { getDatabase, ref as dbRef, set, onValue } from "https://www.gstatic.com/firebasejs/11.0.0/firebase-database.js";
+        
+        // YENİ Firebase Config (ChatTech projesi)
+        const firebaseConfig = {
+            apiKey: "AIzaSyAI0I70K3GIRVaKX4YHUAJVdVVfdyCwqxE",
+            authDomain: "chattech-59575.firebaseapp.com",
+            projectId: "chattech-59575",
+            storageBucket: "chattech-59575.firebasestorage.app",
+            messagingSenderId: "558740544019",
+            appId: "1:558740544019:web:9630e12fe6cab47c547de6",
+            measurementId: "G-2XF2RNWKB1"
+        };
+        
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+        const storage = getStorage(app);
+        const rtdb = getDatabase(app);
+        const provider = new GoogleAuthProvider();
+        
+        window.auth = auth;
+        window.db = db;
+        window.storage = storage;
+        window.rtdb = rtdb;
+        window.provider = provider;
+        window.signInWithPopup = signInWithPopup;
+        window.signOut = signOut;
+        window.collection = collection;
+        window.query = query;
+        window.orderBy = orderBy;
+        window.onSnapshot = onSnapshot;
+        window.addDoc = addDoc;
+        window.serverTimestamp = serverTimestamp;
+        window.doc = doc;
+        window.updateDoc = updateDoc;
+        window.setDoc = setDoc;
+        window.getDoc = getDoc;
+        window.ref = ref;
+        window.uploadBytes = uploadBytes;
+        window.getDownloadURL = getDownloadURL;
+        window.dbRef = dbRef;
+        window.setRtdb = set;
+        window.onValue = onValue;
+        
+        console.log("✅ ChatTech Firebase başlatıldı!");
+    </script>
+    
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+            background: #121212;
+            min-height: 100vh;
+            color: #e0e0e0;
+        }
+        .login-screen {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            text-align: center;
+            padding: 20px;
+            background: linear-gradient(135deg, #075e54 0%, #128c7e 100%);
+        }
+        .login-logo { font-size: 80px; margin-bottom: 20px; }
+        .login-screen h1 { font-size: 2rem; margin-bottom: 10px; color: white; }
+        .login-screen p { color: rgba(255,255,255,0.8); margin-bottom: 40px; }
+        .google-btn {
+            background: white; color: #333; border: none;
+            padding: 14px 32px; border-radius: 60px; font-size: 1rem;
+            font-weight: 600; display: flex; align-items: center;
+            gap: 12px; cursor: pointer;
+        }
+        .app-screen {
+            display: none;
+            height: 100vh;
+            flex-direction: column;
+        }
+        .app-screen.active { display: flex; }
+        .chat-header {
+            background: #075e54; color: white; padding: 15px 20px;
+            display: flex; justify-content: space-between; align-items: center;
+        }
+        .user-info { display: flex; align-items: center; gap: 12px; }
+        .user-avatar {
+            width: 40px; height: 40px; border-radius: 50%;
+            background: #128c7e; display: flex; align-items: center;
+            justify-content: center; font-size: 1rem;
+        }
+        .logout-btn {
+            background: rgba(255,255,255,0.2); padding: 8px 16px;
+            border-radius: 20px; border: none; color: white; cursor: pointer;
+        }
+        .main-container {
+            display: flex; flex: 1; overflow: hidden;
+        }
+        .chat-list {
+            width: 300px; background: #1a1a1a;
+            border-right: 1px solid #2d2d2d; overflow-y: auto;
+        }
+        .chat-list-item {
+            display: flex; align-items: center; gap: 12px;
+            padding: 15px; cursor: pointer; border-bottom: 1px solid #2d2d2d;
+        }
+        .chat-list-item:hover { background: #2d2d2d; }
+        .chat-list-item.active { background: #075e54; }
+        .chat-avatar {
+            width: 50px; height: 50px; border-radius: 50%;
+            background: #128c7e; display: flex; align-items: center;
+            justify-content: center; font-size: 1.2rem;
+        }
+        .chat-info { flex: 1; }
+        .chat-name { font-weight: 600; }
+        .main-chat-area {
+            flex: 1; display: flex; flex-direction: column;
+        }
+        .messages-container {
+            flex: 1; overflow-y: auto; padding: 20px;
+            background: #1e1e1e; display: flex; flex-direction: column;
+            gap: 8px;
+        }
+        .message {
+            max-width: 70%; padding: 10px 15px; border-radius: 18px;
+            word-wrap: break-word;
+        }
+        .message.sent {
+            background: #075e54; color: white;
+            align-self: flex-end; border-bottom-right-radius: 4px;
+        }
+        .message.received {
+            background: #262626; color: #e0e0e0;
+            align-self: flex-start; border-bottom-left-radius: 4px;
+        }
+        .message-sender { font-size: 0.7rem; font-weight: bold; color: #25d366; margin-bottom: 4px; }
+        .message-text { font-size: 0.9rem; }
+        .message-time { font-size: 0.6rem; opacity: 0.6; text-align: right; margin-top: 4px; }
+        .message-image { max-width: 200px; border-radius: 12px; margin-top: 5px; cursor: pointer; }
+        .message-input-area {
+            background: #2d2d2d; padding: 12px 20px;
+            display: flex; gap: 12px; align-items: center;
+        }
+        .message-input {
+            flex: 1; padding: 12px 16px; background: #3d3d3d;
+            border: none; border-radius: 25px; color: white;
+        }
+        .send-btn, .attach-btn {
+            width: 44px; height: 44px; border-radius: 50%;
+            border: none; cursor: pointer; font-size: 1.2rem;
+        }
+        .send-btn { background: #075e54; color: white; }
+        .attach-btn { background: #3d3d3d; }
+        .empty-message { text-align: center; color: #888; padding: 40px; }
+        .toast {
+            position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%);
+            background: #333; color: white; padding: 12px 24px;
+            border-radius: 60px; z-index: 2000;
+        }
+        @media (max-width: 768px) {
+            .chat-list {
+                position: fixed; left: -300px; top: 0; bottom: 0;
+                z-index: 1000; transition: left 0.3s;
+            }
+            .chat-list.open { left: 0; }
+        }
+    </style>
+</head>
+<body>
+
+<div class="login-screen" id="loginScreen">
+    <div class="login-logo">💬</div>
+    <h1>ChatTech</h1>
+    <p>Canlı mesajlaşma, dosya paylaşımı<br>ve gerçek zamanlı sohbet</p>
+    <button class="google-btn" id="googleSignInBtn">
+        <span class="google-icon">G</span>
+        Google ile Giriş Yap
+    </button>
+</div>
+
+<div class="app-screen" id="appScreen">
+    <div class="chat-header">
+        <div class="user-info">
+            <div class="user-avatar" id="userAvatar">👤</div>
+            <div>
+                <div class="user-name" id="userName">Kullanıcı</div>
+                <div class="user-status" id="userStatus" style="font-size:0.7rem;">Çevrimiçi</div>
+            </div>
+        </div>
+        <button class="logout-btn" id="logoutBtn">Çıkış</button>
+    </div>
+
+    <div class="main-container">
+        <div class="chat-list" id="chatList">
+            <div style="padding: 15px; border-bottom: 1px solid #2d2d2d;">
+                <h3>Sohbetler</h3>
+            </div>
+            <div id="usersList"></div>
+        </div>
+
+        <div class="main-chat-area">
+            <div class="messages-container" id="messagesContainer">
+                <div class="empty-message">Bir sohbet seçin veya yeni bir kullanıcıyla mesajlaşmaya başlayın</div>
+            </div>
+            <div class="message-input-area">
+                <button class="attach-btn" id="attachBtn">📎</button>
+                <input type="text" class="message-input" id="messageInput" placeholder="Mesaj yazın...">
+                <button class="send-btn" id="sendBtn">📤</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    let currentUser = null;
+    let selectedUser = null;
+    let currentChatId = null;
+    let messagesUnsubscribe = null;
+    let users = [];
+
+    function showToast(msg) {
+        let t = document.querySelector('.toast');
+        if (t) t.remove();
+        t = document.createElement('div');
+        t.className = 'toast';
+        t.textContent = msg;
+        document.body.appendChild(t);
+        setTimeout(() => t.remove(), 2000);
+    }
+
+    async function setUserOnline(userId, isOnline) {
+        const statusRef = window.dbRef(window.rtdb, `status/${userId}`);
+        await window.setRtdb(statusRef, { online: isOnline, lastSeen: new Date().toISOString() });
+    }
+
+    async function registerUser(user) {
+        const userRef = window.doc(window.db, 'users', user.uid);
+        const userDoc = await window.getDoc(userRef);
+        if (!userDoc.exists()) {
+            await window.setDoc(userRef, {
+                displayName: user.displayName,
+                email: user.email,
+                photoURL: user.photoURL,
+                createdAt: new Date().toISOString()
+            });
+        }
+    }
+
+    async function loadUsers() {
+        const usersRef = window.collection(window.db, 'users');
+        window.onSnapshot(usersRef, (snapshot) => {
+            users = [];
+            snapshot.forEach((doc) => {
+                if (doc.id !== currentUser.uid) {
+                    users.push({ uid: doc.id, ...doc.data() });
+                }
+            });
+            renderUsersList();
+        });
+    }
+
+    function renderUsersList() {
+        const container = document.getElementById('usersList');
+        if (users.length === 0) {
+            container.innerHTML = '<div class="empty-message">Henüz başka kullanıcı yok</div>';
+            return;
+        }
+        container.innerHTML = users.map(u => `
+            <div class="chat-list-item ${selectedUser === u.uid ? 'active' : ''}" onclick="selectChat('${u.uid}')">
+                <div class="chat-avatar">${u.displayName ? u.displayName[0].toUpperCase() : '👤'}</div>
+                <div class="chat-info">
+                    <div class="chat-name">${escapeHtml(u.displayName || u.email)}</div>
+                    <div id="status_${u.uid}">🟢 Çevrimiçi</div>
+                </div>
+            </div>
+        `).join('');
+        
+        users.forEach(u => {
+            const statusRef = window.dbRef(window.rtdb, `status/${u.uid}`);
+            window.onValue(statusRef, (snapshot) => {
+                const data = snapshot.val();
+                const statusEl = document.getElementById(`status_${u.uid}`);
+                if (statusEl) {
+                    statusEl.innerHTML = data?.online ? '🟢 Çevrimiçi' : '⚫ Çevrimdışı';
+                }
+            });
+        });
+    }
+
+    function getChatId(user1, user2) {
+        return user1 < user2 ? `${user1}_${user2}` : `${user2}_${user1}`;
+    }
+
+    async function selectChat(userId) {
+        selectedUser = userId;
+        currentChatId = getChatId(currentUser.uid, userId);
+        
+        document.querySelectorAll('.chat-list-item').forEach(el => el.classList.remove('active'));
+        renderUsersList();
+        
+        if (messagesUnsubscribe) messagesUnsubscribe();
+        
+        const messagesRef = window.collection(window.db, 'chats', currentChatId, 'messages');
+        const q = window.query(messagesRef, window.orderBy('timestamp', 'asc'));
+        
+        messagesUnsubscribe = window.onSnapshot(q, (snapshot) => {
+            const messages = [];
+            snapshot.forEach((doc) => messages.push({ id: doc.id, ...doc.data() }));
+            renderMessages(messages);
+        });
+    }
+
+    async function sendMessage(text, imageUrl = null) {
+        if (!text.trim() && !imageUrl) return;
+        if (!selectedUser) { showToast('Lütfen bir sohbet seçin'); return; }
+        
+        const messagesRef = window.collection(window.db, 'chats', currentChatId, 'messages');
+        await window.addDoc(messagesRef, {
+            text: text,
+            imageUrl: imageUrl,
+            senderId: currentUser.uid,
+            senderName: currentUser.displayName,
+            timestamp: window.serverTimestamp(),
+            read: false
+        });
+        
+        document.getElementById('messageInput').value = '';
+        
+        const chatRef = window.doc(window.db, 'chats', currentChatId);
+        await window.updateDoc(chatRef, {
+            lastMessage: text || (imageUrl ? '📷 Fotoğraf' : ''),
+            lastMessageTime: window.serverTimestamp()
+        });
+    }
+
+    function renderMessages(messages) {
+        const container = document.getElementById('messagesContainer');
+        if (messages.length === 0) {
+            container.innerHTML = '<div class="empty-message">Henüz mesaj yok. İlk mesajı gönderin!</div>';
+            return;
+        }
+        container.innerHTML = messages.map(msg => `
+            <div class="message ${msg.senderId === currentUser.uid ? 'sent' : 'received'}">
+                ${msg.senderId !== currentUser.uid ? `<div class="message-sender">${escapeHtml(msg.senderName)}</div>` : ''}
+                ${msg.imageUrl ? `<img src="${msg.imageUrl}" class="message-image" onclick="window.open('${msg.imageUrl}')">` : ''}
+                ${msg.text ? `<div class="message-text">${escapeHtml(msg.text)}</div>` : ''}
+                <div class="message-time">${msg.timestamp ? new Date(msg.timestamp.toDate()).toLocaleTimeString() : ''}</div>
+            </div>
+        `).join('');
+        container.scrollTop = container.scrollHeight;
+    }
+
+    async function uploadImage(file) {
+        if (!file || !file.type.startsWith('image/')) {
+            showToast('Lütfen bir resim dosyası seçin');
+            return null;
+        }
+        const storageRef = window.ref(window.storage, `chat_images/${currentChatId}/${Date.now()}_${file.name}`);
+        showToast('📤 Resim yükleniyor...');
+        try {
+            await window.uploadBytes(storageRef, file);
+            const url = await window.getDownloadURL(storageRef);
+            showToast('✅ Resim yüklendi');
+            return url;
+        } catch (error) {
+            showToast('❌ Resim yüklenemedi');
+            return null;
+        }
+    }
+
+    function promptImageUpload() {
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.accept = 'image/*';
+        input.onchange = async (e) => {
+            const file = e.target.files[0];
+            if (file) {
+                const url = await uploadImage(file);
+                if (url) await sendMessage('', url);
+            }
+        };
+        input.click();
+    }
+
+    async function handleGoogleSignIn() {
+        try {
+            const result = await window.signInWithPopup(window.auth, window.provider);
+            currentUser = result.user;
+            await registerUser(currentUser);
+            await setUserOnline(currentUser.uid, true);
+            document.getElementById('userName').textContent = currentUser.displayName || currentUser.email.split('@')[0];
+            document.getElementById('userAvatar').textContent = currentUser.displayName ? currentUser.displayName[0].toUpperCase() : '👤';
+            document.getElementById('loginScreen').style.display = 'none';
+            document.getElementById('appScreen').classList.add('active');
+            loadUsers();
+            showToast(`✅ Hoş geldiniz!`);
+        } catch (error) {
+            showToast('❌ Giriş başarısız');
+        }
+    }
+
+    async function handleLogout() {
+        if (currentUser) await setUserOnline(currentUser.uid, false);
+        await window.signOut(window.auth);
+        currentUser = null;
+        selectedUser = null;
+        if (messagesUnsubscribe) messagesUnsubscribe();
+        document.getElementById('appScreen').classList.remove('active');
+        document.getElementById('loginScreen').style.display = 'flex';
+        showToast('🔒 Çıkış yapıldı');
+    }
+
+    function escapeHtml(str) {
+        if (!str) return '';
+        return str.replace(/[&<>]/g, m => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;' }[m] || m));
+    }
+
+    document.getElementById('googleSignInBtn')?.addEventListener('click', handleGoogleSignIn);
+    document.getElementById('logoutBtn')?.addEventListener('click', handleLogout);
+    document.getElementById('sendBtn')?.addEventListener('click', () => {
+        const text = document.getElementById('messageInput').value;
+        if (text.trim()) sendMessage(text);
+    });
+    document.getElementById('attachBtn')?.addEventListener('click', promptImageUpload);
+    document.getElementById('messageInput')?.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') sendMessage(e.target.value);
+    });
+
+    window.selectChat = selectChat;
+
+    window.onAuthStateChanged(window.auth, async (user) => {
+        if (user) {
+            currentUser = user;
+            await registerUser(user);
+            await setUserOnline(user.uid, true);
+            document.getElementById('userName').textContent = user.displayName || user.email.split('@')[0];
+            document.getElementById('userAvatar').textContent = user.displayName ? user.displayName[0].toUpperCase() : '👤';
+            document.getElementById('loginScreen').style.display = 'none';
+            document.getElementById('appScreen').classList.add('active');
+            loadUsers();
+        }
+    });
+
+    window.addEventListener('beforeunload', async () => {
+        if (currentUser) await setUserOnline(currentUser.uid, false);
+    });
+
+    document.getElementById('loginScreen').style.display = 'flex';
+</script>
+</body>
+</html>
